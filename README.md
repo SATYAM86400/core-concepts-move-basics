@@ -130,9 +130,6 @@ x"0A"       // single byte
 
 ## 6. Structs & Abilities
 
-Thought for 7 seconds
-
-
 ### Deep‑Dive: **Struct Abilities** in Move
 
 When you declare a `struct` you decide **which operations the language and the VM will allow on its instances**.
