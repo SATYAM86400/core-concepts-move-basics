@@ -130,21 +130,159 @@ x"0A"       // single byte
 
 ## 6. Structs & Abilities
 
+Thought for 7 seconds
+
+
+### Deep‑Dive: **Struct Abilities** in Move
+
+When you declare a `struct` you decide **which operations the language and the VM will allow on its instances**.
+That decision is expressed with the *ability list* after the keyword `has`.
+
 ```move
 public struct Animal has key, store {
-    id: UID,
-    species: vector<u8>,
+    id: UID,                // unique object ID minted in a tx‑context
+    species: vector<u8>,    // UTF‑8 bytes of the animal’s name
 }
 ```
 
-| Ability | Without it…                         | With it…                    |
-| ------- | ----------------------------------- | --------------------------- |
-| `key`   | cannot exist on‑chain               | becomes an object           |
-| `store` | cannot be stored inside `key`       | can live inside objects     |
-| `copy`  | value **moves** on assignment       | can duplicate (`let b = a`) |
-| `drop`  | must unpack / use before scope ends | can ignore (`let _ = v`)    |
+The four built‑in abilities form the “resource rules” grid:
 
-*Hot‑potato pattern* – a struct **without** `copy` or `drop` must be handed off or destructured: the compiler enforces correct asset flow.
+| Ability | If the struct **lacks** it…                                                                                             | If the struct **has** it…                                                 | Typical use‑cases                                                       |
+| ------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `key`   | *Cannot* live as an on‑chain object; only as an in‑memory value during tx execution.                                    | Becomes a first‑class **object** that Sui can store, version and own.     | NFTs, vaults, game characters, DeFi positions.                          |
+| `store` | *Cannot* be a **field inside** a `key` object or another stored value.                                                  | May be nested inside any other type that itself has `key`.                | Composing objects (`Account` → holds `Coin`), library collection types. |
+| `copy`  | **Move semantics** only – any assignment or function call *moves* the value out of its slot; the original binding dies. | Value can be duplicated (`let y = x` or `*ref`) with no runtime cost.     | Primitive numbers, booleans, small config structs.                      |
+| `drop`  | Compiler forces you to use, move or fully destructure the value before the scope ends.                                  | You may silently ignore the value (`let _ = v`) and it will be discarded. | Helper structs, witness types, temporary vectors.                       |
+
+> 🔥 **Hot‑potato pattern** → a struct **without** `copy` *and* `drop`
+> must always be handed off somewhere – the compiler won’t let a mistake slip through. Perfect for *capabilities* or *tickets* that prove the caller is authorised.
+
+---
+
+#### 1. `key` in action
+
+```move
+/// Mint a new on‑chain Animal object
+public entry fun register(
+    ctx:&mut TxContext, species:vector<u8>
+): Animal {
+    Animal { id: object::new(ctx), species }
+}
+```
+
+* The function is `entry`, so it can be invoked directly from a transaction.
+* `object::new(ctx)` needs the struct to have **`key`**; the resulting value is stored in Sui’s global state and owned either by the sender’s address or by another object if you transfer it there.
+
+Without `key`, trying to publish or transfer the value would raise:
+
+```
+Struct Animal does not have the 'key' ability
+```
+
+---
+
+#### 2. `store` for nested composition
+
+```move
+public struct Zoo has key, store {
+    id: UID,
+    residents: vector<Animal>,   // allowed because Animal also has `store`
+}
+```
+
+If `Animal` lacked `store`, the `Zoo` definition above would fail — you’d be attempting to place a non‑storable type inside a storable object.
+The rule ensures **deep containment** always follows storage‑safety guarantees.
+
+---
+
+#### 3. `copy` vs move semantics
+
+```move
+struct Counter has copy, drop { value: u64 }
+
+// ok – implicit copy
+let a = Counter { value: 1 };
+let b = a;           // a is still usable
+assert!(a.value == 1 && b.value == 1);
+```
+
+Remove `copy` and the second line becomes an *ownership transfer*; you’d get a compiler error if you touch `a` afterwards.
+
+---
+
+#### 4. `drop` and the “must‑use” rule
+
+```move
+struct Temp has copy {}           // copy **but not** drop
+
+fun demo() {
+    let t = Temp {};              // create
+    let _ = t;                    // ✔ explicitly discard     (ok)
+}
+
+fun wont_compile() {
+    let t = Temp {};              // create
+}                                 // ✘ error: unused value of type Temp
+```
+
+Why so strict? In a smart‑contract context an ignored value might mean an asset was silently lost.
+The compiler forces you to show intent: *either* move it, *or* destructure it, *or* mark it as unused.
+
+Add `drop` and the last error disappears:
+
+```move
+struct Temp has copy, drop {}
+```
+
+---
+
+#### 5. Ability recipes & rules‑of‑thumb
+
+| Wanted behaviour                                                    | Ability recipe                                                              |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Pure data, can duplicate, no special life‑cycle                     | `copy, drop`                                                                |
+| “Ticket” / capability – must be handed over & consumed exactly once | *no abilities*                                                              |
+| On‑chain object with simple fields                                  | `key, store`                                                                |
+| On‑chain object that itself holds non‑droppable sub‑assets          | `key, store` on outer object **and** at least `store` on every inner struct |
+
+---
+
+#### 6. Putting it together – a quick demo
+
+```move
+module abilities_demo::demo {
+
+    use sui::tx_context;
+    use sui::object;
+
+    /// Capability that allows minting one special Animal. Hot‑potato style.
+    struct MintCap has key {
+        id: UID,
+    }
+
+    public entry fun create_cap(ctx:&mut tx_context::TxContext): MintCap {
+        MintCap { id: object::new(ctx) }
+    }
+
+    public entry fun mint_with_cap(
+        cap: MintCap, ctx:&mut tx_context::TxContext, species:vector<u8>
+    ): super::Animal {
+        // consume the capability – it cannot be reused
+        let MintCap { id: _ } = cap;
+
+        super::Animal { id: object::new(ctx), species }
+    }
+}
+```
+
+* `MintCap` intentionally **does not** have `copy` or `drop`; the compiler ensures the caller can’t duplicate it nor forget to consume it.
+* After you hand it into `mint_with_cap`, the capability is destroyed (`let MintCap { … } = cap;`) and the function returns a freshly minted `Animal` object.
+
+---
+
+That’s the **full picture**: abilities are how Move encodes asset safety at the type level.
+By picking the right combination you get compile‑time guarantees that a stable‑coin can’t be cloned, an NFT can’t be forgotten, and temporary proofs can’t outlive their purpose.
+
 
 ---
 
