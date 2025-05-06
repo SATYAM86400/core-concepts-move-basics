@@ -1,8 +1,4 @@
-Thought for 10 seconds
 
-
-Below is a **chapter‑style handbook** that goes **one level deeper** than the quick notes you already saw.
-Most subsections follow the pattern:
 
 *What it is → Why it matters → Syntax & rules → Common pitfalls → Mini exercise.*
 
