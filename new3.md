@@ -330,6 +330,47 @@ Encourage saving frequent CLI invocations into *Makefile recipes* or shell scrip
 * Randomness is mocked with cheap arithmetic on TxContext; no oracle needed.
 * Students can see immediate feedback by querying the `rgb` field after each `cycle`.
 
+## 🤹🏻‍♂️ Part C – A Creative “Hello World” Variation
+
+> *“Hello, Colorful Sui!”* – the contract mints a **Color** object that stores an RGB tuple and randomly cycles through hues on every call.
+
+```move
+module colorful::colorful_hello {
+
+    use std::{vector, string};
+    use sui::{object::{Self, UID}, tx_context::{Self, TxContext}, transfer};
+
+    struct Color has key, store {
+        id: UID,
+        rgb: vector<u8>,          // [R,G,B]
+        greeting: string::String, // text
+    }
+
+    /// Mint a random cheerful color
+    public entry fun mint(ctx: &mut TxContext) {
+        let r = tx_context::fresh_id(ctx) as u8;
+        let g = (r * 73) % 256;
+        let b = (g * 59) % 256;
+
+        let c = Color {
+            id: object::new(ctx),
+            rgb: vector[r, g, b],
+            greeting: string::utf8(b"Hello, Colorful Sui!"),
+        };
+        transfer::public_transfer(c, tx_context::sender(ctx));
+    }
+
+    /// Spin the wheel – produces a new shade
+    public entry fun cycle(c: &mut Color) {
+        let r = c.rgb[0];
+        c.rgb = vector[(r + 97) % 256, (r + 173) % 256, (r + 251) % 256];
+    }
+}
+```
+
+Every user ends up owning a uniquely‑colored greeting NFT that morphs each time they call `cycle`. Great first NFT experiment!
+
+
 Challenge learners to:
 
 1. Emit an `event` every time the colour changes (Week 3 topic).
