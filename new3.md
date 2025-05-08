@@ -1,13 +1,5 @@
 # Week 2 – Core Concepts & Move Basics
 
-### **Expanded Instructor Notes & Reference Handbook**
-
-> **How to read this file**
-> \*Section numbers match the table of contents you pasted.
-> \*Every bullet from the original outline has been rewritten in full sentences, with background, rationale, and “what‑can‑go‑wrong” notes.
-> \*CLI blocks are copy‑paste ready; Move snippets compile as‑is (except where noted as pseudo‑code).
-> *“Pedagogy tips” call‑outs tell you where to stop for questions or mini‑labs.*
-
 ---
 
 ## <a id="1"></a>1 · Creating & Exploring a Package
