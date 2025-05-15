@@ -122,38 +122,21 @@ sui client gas                   # printable balance table
 
 ## <a id="4"></a>4 · Writing & Building Your First Module
 
-Below is a fully working “Hello World” contract with **four** learning hooks:
-
-1. Shows the required `has key, store` abilities.
-2. Demonstrates dependency imports (`std::string`, `sui::object`, …).
-3. Uses an `entry` function (tx entry‑point).
-4. Performs a *transfer* so the sender ends up owning the object.
+Below is a fully working “Hello World” contract:
 
 ```move
-module hello_world::hello_world {
+/// The module `hello_world` under named address `hello_world`.
+/// The named address is set in the `Move.toml`.
+module hello_world::hello_world;
 
-    use std::string;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+// Imports the `String` type from the Standard Library
+use std::string::String;
 
-    /// The on‑chain greeting object
-    struct Greeting has key, store {
-        id: UID,
-        text: string::String,
-    }
-
-    /// Mint and send to caller
-    public entry fun mint(ctx: &mut TxContext) {
-        // 1. instantiate object
-        let g = Greeting {
-            id: object::new(ctx),                  // fresh UID
-            text: string::utf8(b"👋 Hello, Move!"),
-        };
-        // 2. transfer to the tx sender
-        transfer::public_transfer(g, tx_context::sender(ctx));
-    }
+/// Returns the "Hello, World!" as a `String`.
+public fun hello_world(): String {
+    b"Hello, World!".to_string()
 }
+
 ```
 
 > **Why do we call `public_transfer`, not `public_share`?**
